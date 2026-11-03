@@ -15,14 +15,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,7 +49,7 @@ enum class SymphonyTab {
     Home,
     Search,
     Library,
-    GlassLab
+    Settings
 }
 
 @Composable
@@ -74,15 +73,16 @@ fun SymphonyApp(playbackManager: SymphonyPlaybackManager) {
     val syncedLyrics by playbackManager.syncedLyrics.collectAsState()
     val currentLyricIndex by playbackManager.currentLyricIndex.collectAsState()
 
+    // Persistent Database & Engines
+    val vibeTracks by playbackManager.vibeTracks.collectAsState()
+    val likedTracks by playbackManager.likedTracks.collectAsState()
+    val downloadedTracks by playbackManager.downloadedTracks.collectAsState()
+    val recentTracks by playbackManager.database.recentTracksFlow.collectAsState()
+    val customPlaylists by playbackManager.customPlaylists.collectAsState()
+
     // UI Navigation State
     var selectedTab by remember { mutableIntStateOf(SymphonyTab.Home.ordinal) }
     var isFullPlayerOpen by remember { mutableStateOf(false) }
-
-    // Glass Lab Tuning Parameters
-    var blurRadiusDp by remember { mutableFloatStateOf(16f) }
-    var refractionHeightDp by remember { mutableFloatStateOf(18f) }
-    var refractionAmountDp by remember { mutableFloatStateOf(32f) }
-    var specularIntensity by remember { mutableFloatStateOf(1.15f) }
 
     val safeDuration = durationMs.coerceAtLeast(1000L)
     val progress = (playbackPositionMs.toFloat() / safeDuration.toFloat()).coerceIn(0f, 1f)
@@ -171,8 +171,9 @@ fun SymphonyApp(playbackManager: SymphonyPlaybackManager) {
                 when (selectedTab) {
                     SymphonyTab.Home.ordinal -> {
                         SymphonyHomeScreen(
-                            tracks = queue,
-                            playlists = SymphonyCatalog.samplePlaylists,
+                            vibeTracks = vibeTracks,
+                            quickPicks = queue,
+                            playlists = if (customPlaylists.isNotEmpty()) customPlaylists else SymphonyCatalog.samplePlaylists,
                             artists = SymphonyCatalog.sampleArtists,
                             currentTrack = currentTrack,
                             isPlaying = isPlaying,
@@ -188,6 +189,7 @@ fun SymphonyApp(playbackManager: SymphonyPlaybackManager) {
                             currentTrack = currentTrack,
                             isPlaying = isPlaying,
                             activeColorStart = activeColors.first,
+                            downloader = playbackManager.downloader,
                             onTrackSelect = { track ->
                                 playbackManager.playTrack(track)
                             },
@@ -195,30 +197,25 @@ fun SymphonyApp(playbackManager: SymphonyPlaybackManager) {
                         )
                     }
                     SymphonyTab.Library.ordinal -> {
-                        val likedTracks = queue.filter { likedIds.contains(it.id) }
                         SymphonyLibraryScreen(
-                            likedTracks = likedTracks,
-                            playlists = SymphonyCatalog.samplePlaylists,
-                            artists = SymphonyCatalog.sampleArtists,
+                            likedTracks = if (likedTracks.isNotEmpty()) likedTracks else queue.filter { likedIds.contains(it.id) },
+                            downloadedTracks = downloadedTracks,
+                            recentTracks = recentTracks,
+                            playlists = if (customPlaylists.isNotEmpty()) customPlaylists else SymphonyCatalog.samplePlaylists,
                             currentTrack = currentTrack,
                             isPlaying = isPlaying,
                             activeColorStart = activeColors.first,
+                            downloader = playbackManager.downloader,
                             onTrackSelect = { track ->
                                 playbackManager.playTrack(track)
                             },
                             backdrop = backdropLayer
                         )
                     }
-                    SymphonyTab.GlassLab.ordinal -> {
-                        SymphonyGlassLabScreen(
-                            blurRadius = blurRadiusDp,
-                            refractionHeight = refractionHeightDp,
-                            refractionAmount = refractionAmountDp,
-                            specularIntensity = specularIntensity,
-                            onBlurRadiusChange = { blurRadiusDp = it },
-                            onRefractionHeightChange = { refractionHeightDp = it },
-                            onRefractionAmountChange = { refractionAmountDp = it },
-                            onSpecularIntensityChange = { specularIntensity = it },
+                    SymphonyTab.Settings.ordinal -> {
+                        SymphonySettingsScreen(
+                            updater = playbackManager.updater,
+                            downloader = playbackManager.downloader,
                             activeColorStart = activeColors.first,
                             backdrop = backdropLayer
                         )
@@ -282,10 +279,10 @@ fun SymphonyApp(playbackManager: SymphonyPlaybackManager) {
                         onClick = { selectedTab = SymphonyTab.Library.ordinal }
                     )
                     SymphonyNavTab(
-                        title = "Glass Lab",
-                        icon = Icons.Rounded.Tune,
-                        index = SymphonyTab.GlassLab.ordinal,
-                        onClick = { selectedTab = SymphonyTab.GlassLab.ordinal }
+                        title = "Settings",
+                        icon = Icons.Rounded.Settings,
+                        index = SymphonyTab.Settings.ordinal,
+                        onClick = { selectedTab = SymphonyTab.Settings.ordinal }
                     )
                 }
             }

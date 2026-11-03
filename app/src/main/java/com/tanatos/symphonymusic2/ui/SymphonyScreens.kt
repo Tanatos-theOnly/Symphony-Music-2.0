@@ -1,5 +1,8 @@
 package com.tanatos.symphonymusic2.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,20 +26,30 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.Verified
-import androidx.compose.material.icons.rounded.Waves
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -53,17 +66,17 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.styropyr0.prismal.PrismalBackdrop
-import com.styropyr0.prismal.components.PrismalGlassSlider
-import com.styropyr0.prismal.components.PrismalGlassToggle
 import com.styropyr0.prismal.components.PrismalSegmentedControl
-import com.styropyr0.prismal.shapes.PrismalCapsule
 import com.styropyr0.prismal.shapes.PrismalRoundedRectangle
+import com.tanatos.symphonymusic2.engine.SymphonyDownloader
 import com.tanatos.symphonymusic2.engine.SymphonyMusicEngine
+import com.tanatos.symphonymusic2.engine.SymphonyUpdater
 import com.tanatos.symphonymusic2.model.Artist
 import com.tanatos.symphonymusic2.model.Playlist
 import com.tanatos.symphonymusic2.model.Track
@@ -74,7 +87,8 @@ import kotlinx.coroutines.launch
 // ==========================================
 @Composable
 fun SymphonyHomeScreen(
-    tracks: List<Track>,
+    vibeTracks: List<Track>,
+    quickPicks: List<Track>,
     playlists: List<Playlist>,
     artists: List<Artist>,
     currentTrack: Track,
@@ -108,7 +122,7 @@ fun SymphonyHomeScreen(
                         color = Color.White
                     )
                     Text(
-                        text = "3D AGSL Liquid Glass • Hi-Fi Streaming",
+                        text = "Hi-Fi Audio • 3D Liquid Glass",
                         fontSize = 12.sp,
                         fontFamily = GeistFontFamily,
                         color = Color.White.copy(alpha = 0.6f)
@@ -146,8 +160,169 @@ fun SymphonyHomeScreen(
             }
         }
 
+        // ==========================================
+        // SECTION: "Tuned to your vibe" (BOLI)
+        // ==========================================
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.AutoAwesome,
+                        contentDescription = null,
+                        tint = activeColorStart,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Tuned to your vibe",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = GeistFontFamily,
+                        color = Color.White
+                    )
+                }
+
+                if (vibeTracks.isNotEmpty()) {
+                    Text(
+                        text = "Based on interaction",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontFamily = GeistFontFamily
+                    )
+                }
+            }
+
+            if (vibeTracks.isEmpty()) {
+                // Empty Vibe Placeholder Card matching Symphony logic
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 6.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Color.White.copy(alpha = 0.04f))
+                        .padding(18.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "No tunes matching your vibe yet.\nPlay a song to get started!",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 13.sp,
+                            fontFamily = GeistFontFamily,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 18.sp
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        SymphonyPebbleGlass(
+                            backdrop = backdrop,
+                            cornerRadius = 16.dp,
+                            chromaticColor = activeColorStart,
+                            highlightIntensity = 1.0f,
+                            onClick = {
+                                if (quickPicks.isNotEmpty()) onTrackSelect(quickPicks.first())
+                            },
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Text(
+                                text = "Play a Quick Pick",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = GeistFontFamily,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Vibe Tracks Carousel
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    items(vibeTracks) { track ->
+                        val isCurrent = track.id == currentTrack.id
+                        Column(
+                            modifier = Modifier
+                                .width(140.dp)
+                                .clickable { onTrackSelect(track) }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(140.dp)
+                                    .shadow(
+                                        elevation = if (isCurrent) 16.dp else 6.dp,
+                                        shape = RoundedCornerShape(20.dp),
+                                        spotColor = activeColorStart
+                                    )
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(Brush.linearGradient(listOf(track.colorStart, track.colorEnd))),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (track.thumbnailUrl.isNotBlank()) {
+                                    AsyncImage(
+                                        model = track.thumbnailUrl,
+                                        contentDescription = track.title,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    Text("♪", color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Bold)
+                                }
+
+                                if (isCurrent && isPlaying) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Color.Black.copy(alpha = 0.45f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.GraphicEq,
+                                            contentDescription = "Playing",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Text(
+                                text = track.title,
+                                color = if (isCurrent) activeColorStart else Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                fontFamily = GeistFontFamily,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = track.artist,
+                                color = Color.White.copy(alpha = 0.6f),
+                                fontSize = 11.sp,
+                                fontFamily = GeistFontFamily,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Quick Picks Section
         item {
+            Spacer(modifier = Modifier.height(20.dp))
             Text(
                 text = "Quick Picks",
                 fontSize = 18.sp,
@@ -161,7 +336,7 @@ fun SymphonyHomeScreen(
                 contentPadding = PaddingValues(horizontal = 20.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                items(tracks) { track ->
+                items(quickPicks) { track ->
                     val isCurrent = track.id == currentTrack.id
                     Column(
                         modifier = Modifier
@@ -316,103 +491,6 @@ fun SymphonyHomeScreen(
             }
         }
 
-        // Trending Tracks Section
-        item {
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(
-                text = "Trending Now",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = GeistFontFamily,
-                color = Color.White,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-            )
-        }
-
-        itemsIndexed(tracks) { index, track ->
-            val isCurrent = track.id == currentTrack.id
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 6.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(if (isCurrent) activeColorStart.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.03f))
-                    .clickable { onTrackSelect(track) }
-                    .padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Rank number
-                Text(
-                    text = "${index + 1}",
-                    color = if (isCurrent) activeColorStart else Color.White.copy(alpha = 0.4f),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = GeistFontFamily,
-                    modifier = Modifier.width(26.dp)
-                )
-
-                // Thumbnail
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Brush.linearGradient(listOf(track.colorStart, track.colorEnd))),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (track.thumbnailUrl.isNotBlank()) {
-                        AsyncImage(
-                            model = track.thumbnailUrl,
-                            contentDescription = track.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Text("♪", color = Color.White, fontSize = 16.sp)
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = track.title,
-                        color = if (isCurrent) activeColorStart else Color.White,
-                        fontSize = 14.sp,
-                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
-                        fontFamily = GeistFontFamily,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = track.artist,
-                        color = Color.White.copy(alpha = 0.6f),
-                        fontSize = 12.sp,
-                        fontFamily = GeistFontFamily,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                // Play pebble icon
-                SymphonyPebbleGlass(
-                    backdrop = backdrop,
-                    isCircle = true,
-                    cornerRadius = 16.dp,
-                    chromaticColor = track.colorStart,
-                    highlightIntensity = 1.0f,
-                    onClick = { onTrackSelect(track) },
-                    modifier = Modifier.size(34.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isCurrent && isPlaying) Icons.Rounded.GraphicEq else Icons.Rounded.PlayArrow,
-                        contentDescription = "Play",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-        }
-
         // Top Artists Section
         item {
             Spacer(modifier = Modifier.height(20.dp))
@@ -484,6 +562,7 @@ fun SymphonySearchScreen(
     currentTrack: Track,
     isPlaying: Boolean,
     activeColorStart: Color,
+    downloader: SymphonyDownloader,
     onTrackSelect: (Track) -> Unit,
     backdrop: PrismalBackdrop,
     modifier: Modifier = Modifier
@@ -492,6 +571,7 @@ fun SymphonySearchScreen(
     var isSearching by remember { mutableStateOf(false) }
     var searchResults by remember { mutableStateOf<List<Track>>(emptyList()) }
     val scope = rememberCoroutineScope()
+    val downloadProgress by downloader.downloadProgress.collectAsState()
 
     val discoveryGenres = listOf(
         Pair("Synthwave", Color(0xFF8B5CF6)),
@@ -675,13 +755,16 @@ fun SymphonySearchScreen(
 
             itemsIndexed(searchResults) { _, track ->
                 val isCurrent = track.id == currentTrack.id
+                val isDownloaded = downloader.isDownloaded(track.id)
+                val dlProgress = downloadProgress[track.id]
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp, vertical = 5.dp)
                         .clip(RoundedCornerShape(14.dp))
                         .background(if (isCurrent) activeColorStart.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.03f))
-                    .clickable { onTrackSelect(track) }
+                        .clickable { onTrackSelect(track) }
                         .padding(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -726,6 +809,45 @@ fun SymphonySearchScreen(
                         )
                     }
 
+                    // Download Button
+                    IconButton(
+                        onClick = {
+                            if (!isDownloaded && dlProgress == null) {
+                                downloader.startDownload(track)
+                            }
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        when {
+                            dlProgress != null -> {
+                                CircularProgressIndicator(
+                                    progress = { dlProgress },
+                                    color = activeColorStart,
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            isDownloaded -> {
+                                Icon(
+                                    imageVector = Icons.Rounded.DownloadDone,
+                                    contentDescription = "Downloaded",
+                                    tint = Color(0xFF10B981),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            else -> {
+                                Icon(
+                                    imageVector = Icons.Rounded.Download,
+                                    contentDescription = "Download",
+                                    tint = Color.White.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
                     SymphonyPebbleGlass(
                         backdrop = backdrop,
                         isCircle = true,
@@ -749,22 +871,24 @@ fun SymphonySearchScreen(
 }
 
 // ==========================================
-// 3. LIBRARY SCREEN
+// 3. LIBRARY SCREEN (Persistent Storage)
 // ==========================================
 @Composable
 fun SymphonyLibraryScreen(
     likedTracks: List<Track>,
+    downloadedTracks: List<Track>,
+    recentTracks: List<Track>,
     playlists: List<Playlist>,
-    artists: List<Artist>,
     currentTrack: Track,
     isPlaying: Boolean,
     activeColorStart: Color,
+    downloader: SymphonyDownloader,
     onTrackSelect: (Track) -> Unit,
     backdrop: PrismalBackdrop,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Liked Songs", "Playlists", "Artists")
+    val tabs = listOf("Liked", "Offline", "Playlists", "Recent")
 
     LazyColumn(
         modifier = modifier
@@ -782,7 +906,7 @@ fun SymphonyLibraryScreen(
                     color = Color.White
                 )
                 Text(
-                    text = "Your music, playlists and favorites",
+                    text = "Persistent likes, offline downloads and history",
                     fontSize = 12.sp,
                     fontFamily = GeistFontFamily,
                     color = Color.White.copy(alpha = 0.6f)
@@ -803,6 +927,7 @@ fun SymphonyLibraryScreen(
 
         when (selectedTab) {
             0 -> {
+                // Liked Tracks Tab
                 if (likedTracks.isEmpty()) {
                     item {
                         Box(
@@ -812,16 +937,19 @@ fun SymphonyLibraryScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = "No liked tracks yet.\nHeart tracks while listening to add them here!",
+                                text = "No liked tracks yet.\nHeart tracks while listening to save them permanently!",
                                 color = Color.White.copy(alpha = 0.5f),
                                 fontFamily = GeistFontFamily,
-                                fontSize = 14.sp
+                                fontSize = 14.sp,
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
                 } else {
                     itemsIndexed(likedTracks) { _, track ->
                         val isCurrent = track.id == currentTrack.id
+                        val isDownloaded = downloader.isDownloaded(track.id)
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -884,6 +1012,91 @@ fun SymphonyLibraryScreen(
                 }
             }
             1 -> {
+                // Offline Downloads Tab
+                if (downloadedTracks.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 40.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "No downloaded songs yet.\nTap the download icon on any song to listen 100% offline!",
+                                color = Color.White.copy(alpha = 0.5f),
+                                fontFamily = GeistFontFamily,
+                                fontSize = 14.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    itemsIndexed(downloadedTracks) { _, track ->
+                        val isCurrent = track.id == currentTrack.id
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 5.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(if (isCurrent) activeColorStart.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.03f))
+                                .clickable { onTrackSelect(track) }
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFF10B981).copy(alpha = 0.3f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.DownloadDone,
+                                    contentDescription = null,
+                                    tint = Color(0xFF10B981),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = track.title,
+                                    color = if (isCurrent) activeColorStart else Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                                    fontFamily = GeistFontFamily,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "${track.artist} • Offline Audio",
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    fontSize = 12.sp,
+                                    fontFamily = GeistFontFamily,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            IconButton(
+                                onClick = { downloader.removeDownload(track.id) },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.DeleteOutline,
+                                    contentDescription = "Delete",
+                                    tint = Color.White.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            2 -> {
+                // Playlists Tab
                 items(playlists) { pl ->
                     Row(
                         modifier = Modifier
@@ -902,16 +1115,7 @@ fun SymphonyLibraryScreen(
                                 .background(Brush.linearGradient(listOf(pl.colorStart, pl.colorEnd))),
                             contentAlignment = Alignment.Center
                         ) {
-                            if (pl.coverUrl.isNotBlank()) {
-                                AsyncImage(
-                                    model = pl.coverUrl,
-                                    contentDescription = pl.title,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                Icon(Icons.Rounded.MusicNote, null, tint = Color.White)
-                            }
+                            Icon(Icons.Rounded.MusicNote, null, tint = Color.White)
                         }
 
                         Spacer(modifier = Modifier.width(14.dp))
@@ -934,53 +1138,62 @@ fun SymphonyLibraryScreen(
                     }
                 }
             }
-            2 -> {
-                items(artists) { ar ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 6.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(Color.White.copy(alpha = 0.03f))
-                            .clickable { /* open */ }
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+            3 -> {
+                // Recent History Tab
+                if (recentTracks.isEmpty()) {
+                    item {
                         Box(
                             modifier = Modifier
-                                .size(52.dp)
-                                .clip(CircleShape)
-                                .background(Brush.linearGradient(listOf(ar.color, Color(0xFF1E293B)))),
+                                .fillMaxWidth()
+                                .padding(top = 40.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            if (ar.avatarUrl.isNotBlank()) {
-                                AsyncImage(
-                                    model = ar.avatarUrl,
-                                    contentDescription = ar.name,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                Text(ar.name.take(1), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                            }
+                            Text(
+                                text = "No recent playback history yet.",
+                                color = Color.White.copy(alpha = 0.5f),
+                                fontFamily = GeistFontFamily,
+                                fontSize = 14.sp
+                            )
                         }
-
-                        Spacer(modifier = Modifier.width(14.dp))
-
-                        Column {
-                            Text(
-                                text = ar.name,
-                                color = Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                fontFamily = GeistFontFamily
+                    }
+                } else {
+                    items(recentTracks) { track ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 5.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color.White.copy(alpha = 0.03f))
+                                .clickable { onTrackSelect(track) }
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.History,
+                                contentDescription = null,
+                                tint = activeColorStart,
+                                modifier = Modifier.size(24.dp)
                             )
-                            Text(
-                                text = ar.monthlyListeners,
-                                color = Color.White.copy(alpha = 0.6f),
-                                fontSize = 12.sp,
-                                fontFamily = GeistFontFamily
-                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = track.title,
+                                    color = Color.White,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = GeistFontFamily,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = track.artist,
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    fontSize = 12.sp,
+                                    fontFamily = GeistFontFamily,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
@@ -990,22 +1203,26 @@ fun SymphonyLibraryScreen(
 }
 
 // ==========================================
-// 4. GLASS LAB SCREEN (AGSL Shader Tuning)
+// 4. SETTINGS SCREEN (Symphony Minimalist)
 // ==========================================
 @Composable
-fun SymphonyGlassLabScreen(
-    blurRadius: Float,
-    refractionHeight: Float,
-    refractionAmount: Float,
-    specularIntensity: Float,
-    onBlurRadiusChange: (Float) -> Unit,
-    onRefractionHeightChange: (Float) -> Unit,
-    onRefractionAmountChange: (Float) -> Unit,
-    onSpecularIntensityChange: (Float) -> Unit,
+fun SymphonySettingsScreen(
+    updater: SymphonyUpdater,
+    downloader: SymphonyDownloader,
     activeColorStart: Color,
     backdrop: PrismalBackdrop,
     modifier: Modifier = Modifier
 ) {
+    val isCheckingUpdates by updater.isChecking.collectAsState()
+    val updateAvailable by updater.updateAvailable.collectAsState()
+    val latestVersion by updater.latestVersion.collectAsState()
+    val releaseNotes by updater.releaseNotes.collectAsState()
+    val downloadProgress by updater.downloadProgress.collectAsState()
+    val isDownloading by updater.isDownloading.collectAsState()
+
+    var selectedQuality by remember { mutableIntStateOf(0) }
+    val qualities = listOf("Hi-Res FLAC (320 kbps)", "High (256 kbps)", "Normal (160 kbps)")
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -1015,138 +1232,282 @@ fun SymphonyGlassLabScreen(
         item {
             Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) {
                 Text(
-                    text = "AGSL Glass Lab",
+                    text = "Settings",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = GeistFontFamily,
                     color = Color.White
                 )
                 Text(
-                    text = "Tune hardware shaders and liquid physics in real-time",
+                    text = "Preferences, audio quality & in-app updates",
                     fontSize = 12.sp,
                     fontFamily = GeistFontFamily,
                     color = Color.White.copy(alpha = 0.6f)
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                // Interactive preview card
+                // ==========================================
+                // 1. IN-APP UPDATE CARD
+                // ==========================================
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp)
-                        .clip(RoundedCornerShape(24.dp))
+                        .clip(RoundedCornerShape(20.dp))
                         .background(
-                            Brush.linearGradient(
-                                listOf(
-                                    activeColorStart.copy(alpha = 0.5f),
-                                    Color(0xFF0F172A),
-                                    Color(0xFF3B82F6).copy(alpha = 0.3f)
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
+                            if (updateAvailable) activeColorStart.copy(alpha = 0.18f)
+                            else Color.White.copy(alpha = 0.04f)
+                        )
+                        .padding(16.dp)
                 ) {
-                    SymphonyPebbleGlass(
-                        backdrop = backdrop,
-                        shape = { PrismalRoundedRectangle(24.dp) },
-                        cornerRadius = 24.dp,
-                        chromaticColor = activeColorStart,
-                        highlightIntensity = specularIntensity,
-                        modifier = Modifier
-                            .fillMaxWidth(0.85f)
-                            .height(100.dp)
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(
-                                text = "3D Liquid Glass Pebble",
-                                color = Color.White,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = GeistFontFamily
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = if (updateAvailable) Icons.Rounded.SystemUpdate else Icons.Rounded.CheckCircle,
+                                    contentDescription = null,
+                                    tint = if (updateAvailable) activeColorStart else Color(0xFF10B981),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = if (updateAvailable) "New Version Available: v$latestVersion" else "Symphony 2.0 is up to date",
+                                        color = Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = GeistFontFamily
+                                    )
+                                    Text(
+                                        text = if (updateAvailable) "Tap below to download & install" else "Current installed version: v2.0.0",
+                                        color = Color.White.copy(alpha = 0.6f),
+                                        fontSize = 12.sp,
+                                        fontFamily = GeistFontFamily
+                                    )
+                                }
+                            }
+
+                            if (!updateAvailable) {
+                                IconButton(
+                                    onClick = { updater.checkForUpdates() },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    if (isCheckingUpdates) {
+                                        CircularProgressIndicator(
+                                            color = activeColorStart,
+                                            strokeWidth = 2.dp,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Refresh,
+                                            contentDescription = "Check",
+                                            tint = Color.White.copy(alpha = 0.7f),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (updateAvailable) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            if (releaseNotes.isNotBlank()) {
+                                Text(
+                                    text = releaseNotes.take(160) + "...",
+                                    color = Color.White.copy(alpha = 0.7f),
+                                    fontSize = 12.sp,
+                                    fontFamily = GeistFontFamily
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                            }
+
+                            if (isDownloading) {
+                                LinearProgressIndicator(
+                                    progress = { downloadProgress },
+                                    color = activeColorStart,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp))
+                                )
+                            } else {
+                                SymphonyPebbleGlass(
+                                    backdrop = backdrop,
+                                    cornerRadius = 16.dp,
+                                    chromaticColor = activeColorStart,
+                                    highlightIntensity = 1.0f,
+                                    onClick = { updater.downloadAndInstallUpdate() },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(40.dp)
+                                ) {
+                                    Text(
+                                        text = "Download & Install v$latestVersion",
+                                        color = Color.White,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = GeistFontFamily
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // ==========================================
+                // 2. AUDIO & STREAMING PREFERENCES
+                // ==========================================
+                Text(
+                    text = "Streaming Audio Quality",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = GeistFontFamily,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                qualities.forEachIndexed { index, quality ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (selectedQuality == index) activeColorStart.copy(alpha = 0.15f)
+                                else Color.White.copy(alpha = 0.03f)
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Live AGSL Refraction & Meniscus",
-                                color = Color.White.copy(alpha = 0.7f),
-                                fontSize = 12.sp,
-                                fontFamily = GeistFontFamily
+                            .clickable { selectedQuality = index }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = quality,
+                            color = if (selectedQuality == index) activeColorStart else Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = if (selectedQuality == index) FontWeight.Bold else FontWeight.Normal,
+                            fontFamily = GeistFontFamily
+                        )
+
+                        if (selectedQuality == index) {
+                            Icon(
+                                imageVector = Icons.Rounded.CheckCircle,
+                                contentDescription = null,
+                                tint = activeColorStart,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
                 }
 
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // ==========================================
+                // 3. OFFLINE STORAGE & CACHE
+                // ==========================================
+                Text(
+                    text = "Offline Downloads & Cache",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = GeistFontFamily,
+                    color = Color.White
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.White.copy(alpha = 0.03f))
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(
+                            text = "Clear All Offline Downloads",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            fontFamily = GeistFontFamily
+                        )
+                        Text(
+                            text = "Free up storage on your phone",
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 11.sp,
+                            fontFamily = GeistFontFamily
+                        )
+                    }
+
+                    SymphonyPebbleGlass(
+                        backdrop = backdrop,
+                        cornerRadius = 14.dp,
+                        chromaticColor = Color(0xFFEF4444),
+                        highlightIntensity = 0.9f,
+                        onClick = { downloader.clearAllDownloads() },
+                        modifier = Modifier.height(34.dp)
+                    ) {
+                        Text(
+                            text = "Clear",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = GeistFontFamily,
+                            modifier = Modifier.padding(horizontal = 14.dp)
+                        )
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Sliders
+                // ==========================================
+                // 4. ABOUT SYMPHONY 2.0
+                // ==========================================
                 Text(
-                    text = "Blur Radius: ${blurRadius.toInt()} dp",
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontFamily = GeistFontFamily
+                    text = "About Symphony 2.0",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = GeistFontFamily,
+                    color = Color.White
                 )
-                PrismalGlassSlider(
-                    value = { (blurRadius - 4f) / (40f - 4f) },
-                    onValueChange = { onBlurRadiusChange(4f + it * 36f) },
-                    valueRange = 0f..1f,
-                    visibilityThreshold = 0.005f,
-                    backdrop = backdrop,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Spacer(modifier = Modifier.height(8.dp))
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    text = "Refraction Height: ${refractionHeight.toInt()} dp",
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontFamily = GeistFontFamily
-                )
-                PrismalGlassSlider(
-                    value = { (refractionHeight - 4f) / (40f - 4f) },
-                    onValueChange = { onRefractionHeightChange(4f + it * 36f) },
-                    valueRange = 0f..1f,
-                    visibilityThreshold = 0.005f,
-                    backdrop = backdrop,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    text = "Refraction Amount: ${refractionAmount.toInt()} dp",
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontFamily = GeistFontFamily
-                )
-                PrismalGlassSlider(
-                    value = { refractionAmount / 64f },
-                    onValueChange = { onRefractionAmountChange(it * 64f) },
-                    valueRange = 0f..1f,
-                    visibilityThreshold = 0.005f,
-                    backdrop = backdrop,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    text = "Specular Intensity: ${String.format("%.2f", specularIntensity)}x",
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    fontFamily = GeistFontFamily
-                )
-                PrismalGlassSlider(
-                    value = { (specularIntensity - 0.5f) / 1.5f },
-                    onValueChange = { onSpecularIntensityChange(0.5f + it * 1.5f) },
-                    valueRange = 0f..1f,
-                    visibilityThreshold = 0.005f,
-                    backdrop = backdrop,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.White.copy(alpha = 0.03f))
+                        .padding(14.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "Symphony 2.0 Native (v2.0.0)",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = GeistFontFamily
+                        )
+                        Text(
+                            text = "Application ID: com.tanatos.symphonymusic2",
+                            color = Color.White.copy(alpha = 0.6f),
+                            fontSize = 11.sp,
+                            fontFamily = GeistFontFamily
+                        )
+                        Text(
+                            text = "Developed by Tanatos • Powered by Prismal AGSL & Media3 ExoPlayer",
+                            color = Color.White.copy(alpha = 0.6f),
+                            fontSize = 11.sp,
+                            fontFamily = GeistFontFamily
+                        )
+                    }
+                }
             }
         }
     }

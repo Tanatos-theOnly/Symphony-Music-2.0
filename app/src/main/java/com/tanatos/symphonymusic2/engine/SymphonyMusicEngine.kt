@@ -293,6 +293,101 @@ object SymphonyMusicEngine {
         null
     }
 
+    /**
+     * "Tuned to your vibe" (BOLI - Based On Last Interaction)
+     * Fetches real-time related songs matching the vibe of the last played track.
+     */
+    suspend fun getVibeTracksFor(videoId: String): List<Track> = withContext(Dispatchers.IO) {
+        if (videoId.isBlank()) return@withContext emptyList()
+        val list = mutableListOf<Track>()
+
+        try {
+            val payload = JSONObject().apply {
+                put("context", JSONObject().apply {
+                    put("client", JSONObject().apply {
+                        put("clientName", "WEB_REMIX")
+                        put("clientVersion", "1.20240101.01.00")
+                        put("hl", "en")
+                        put("gl", "US")
+                    })
+                })
+                put("videoId", videoId)
+                put("enablePersistentPlaylistPanel", true)
+            }
+
+            val request = Request.Builder()
+                .url("https://music.youtube.com/youtubei/v1/next")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .header("Referer", "https://music.youtube.com/")
+                .post(payload.toString().toRequestBody(jsonMediaType))
+                .build()
+
+            httpClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val bodyString = response.body?.string().orEmpty()
+                    val json = JSONObject(bodyString)
+                    parseNextTracks(json, list)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        list
+    }
+
+    private fun parseNextTracks(root: JSONObject, outList: MutableList<Track>) {
+        try {
+            val tabs = root.optJSONObject("contents")
+                ?.optJSONObject("singleColumnMusicWatchNextResultsRenderer")
+                ?.optJSONObject("tabbedRenderer")
+                ?.optJSONObject("watchNextTabbedResultsRenderer")
+                ?.optJSONArray("tabs") ?: return
+
+            val queueContent = tabs.optJSONObject(0)
+                ?.optJSONObject("tabRenderer")
+                ?.optJSONObject("content")
+                ?.optJSONObject("musicQueueRenderer")
+                ?.optJSONObject("content")
+                ?.optJSONObject("playlistPanelRenderer")
+                ?.optJSONArray("contents") ?: return
+
+            for (i in 0 until queueContent.length()) {
+                val item = queueContent.optJSONObject(i)?.optJSONObject("playlistPanelVideoRenderer") ?: continue
+                val videoId = item.optString("videoId")
+                if (videoId.isBlank()) continue
+
+                val titleObj = item.optJSONObject("title")
+                val title = titleObj?.optJSONArray("runs")?.optJSONObject(0)?.optString("text") ?: continue
+
+                val byline = item.optJSONObject("shortBylineText") ?: item.optJSONObject("longBylineText")
+                val artist = byline?.optJSONArray("runs")?.optJSONObject(0)?.optString("text") ?: "Artist"
+
+                val thumbs = item.optJSONObject("thumbnail")?.optJSONArray("thumbnails")
+                val thumbUrl = if (thumbs != null && thumbs.length() > 0) {
+                    thumbs.optJSONObject(thumbs.length() - 1)?.optString("url").orEmpty()
+                } else "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+
+                val (cStart, cEnd) = generatePaletteColors(title + artist)
+                outList.add(
+                    Track(
+                        id = videoId,
+                        title = title,
+                        artist = artist,
+                        album = "Tuned to your vibe",
+                        durationSeconds = 210,
+                        thumbnailUrl = thumbUrl,
+                        audioStreamUrl = "",
+                        colorStart = cStart,
+                        colorEnd = cEnd
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     private fun generatePaletteColors(seed: String): Pair<Color, Color> {
         val hash = seed.hashCode()
         val hues = listOf(

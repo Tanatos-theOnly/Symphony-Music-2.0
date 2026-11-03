@@ -13,6 +13,7 @@ import androidx.palette.graphics.Palette
 import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import com.tanatos.symphonymusic2.data.SymphonyDatabase
 import com.tanatos.symphonymusic2.model.LyricLine
 import com.tanatos.symphonymusic2.model.SyncedLyrics
 import com.tanatos.symphonymusic2.model.SymphonyCatalog
@@ -30,6 +31,10 @@ import kotlinx.coroutines.withContext
 
 class SymphonyPlaybackManager private constructor(private val appContext: Context) {
     private val scope = CoroutineScope(Dispatchers.Main + Job())
+
+    val database = SymphonyDatabase.getInstance(appContext)
+    val downloader = SymphonyDownloader.getInstance(appContext)
+    val updater = SymphonyUpdater.getInstance(appContext)
 
     private var exoPlayer: ExoPlayer? = null
     private var tickerJob: Job? = null
@@ -56,7 +61,7 @@ class SymphonyPlaybackManager private constructor(private val appContext: Contex
     private val _repeatMode = MutableStateFlow(0) // 0: off, 1: all, 2: one
     val repeatMode: StateFlow<Int> = _repeatMode.asStateFlow()
 
-    private val _likedIds = MutableStateFlow<Set<String>>(setOf("symphony_starboy", "symphony_blinding_lights"))
+    private val _likedIds = MutableStateFlow<Set<String>>(emptySet())
     val likedIds: StateFlow<Set<String>> = _likedIds.asStateFlow()
 
     private val _activeColors = MutableStateFlow(Pair(Color(0xFFEF4444), Color(0xFF7C3AED)))
@@ -73,8 +78,43 @@ class SymphonyPlaybackManager private constructor(private val appContext: Contex
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    // "Tuned to your vibe" (BOLI - Based On Last Interaction)
+    private val _vibeTracks = MutableStateFlow<List<Track>>(emptyList())
+    val vibeTracks: StateFlow<List<Track>> = _vibeTracks.asStateFlow()
+
+    val likedTracks = database.likedTracksFlow
+    val downloadedTracks = database.downloadedTracksFlow
+    val customPlaylists = database.playlistsFlow
+
     init {
         initPlayer()
+        initDatabaseSync()
+    }
+
+    private fun initDatabaseSync() {
+        // Load persistent likes
+        val savedLikes = database.getLikedTracks()
+        if (savedLikes.isEmpty()) {
+            // Seed initial favorites
+            for (t in SymphonyCatalog.sampleTracks.take(2)) {
+                database.toggleLike(t)
+            }
+        }
+        _likedIds.value = database.getLikedTracks().map { it.id }.toSet()
+
+        // Check for updates quietly
+        updater.checkForUpdates(silent = true)
+
+        // Seed "Tuned to your vibe" based on last interaction
+        val lastSongId = database.getSetting("recentSongId")
+        if (lastSongId.isNotBlank()) {
+            scope.launch(Dispatchers.IO) {
+                val vibe = SymphonyMusicEngine.getVibeTracksFor(lastSongId)
+                if (vibe.isNotEmpty()) {
+                    _vibeTracks.value = vibe
+                }
+            }
+        }
     }
 
     private fun initPlayer() {
@@ -131,6 +171,17 @@ class SymphonyPlaybackManager private constructor(private val appContext: Contex
         _playbackPositionMs.value = 0L
         _durationMs.value = (track.durationSeconds * 1000L).coerceAtLeast(1000L)
         _activeColors.value = Pair(track.colorStart, track.colorEnd)
+
+        // Record in persistent history
+        database.recordTrackPlayed(track)
+
+        // Asynchronously update "Tuned to your vibe"
+        scope.launch(Dispatchers.IO) {
+            val vibe = SymphonyMusicEngine.getVibeTracksFor(track.id)
+            if (vibe.isNotEmpty()) {
+                _vibeTracks.value = vibe
+            }
+        }
 
         // Asynchronously extract dynamic Material You palette & fetch synced lyrics
         extractDynamicPalette(track.thumbnailUrl)
@@ -223,13 +274,11 @@ class SymphonyPlaybackManager private constructor(private val appContext: Contex
     }
 
     fun toggleLike(trackId: String) {
-        val current = _likedIds.value.toMutableSet()
-        if (current.contains(trackId)) {
-            current.remove(trackId)
-        } else {
-            current.add(trackId)
-        }
-        _likedIds.value = current
+        val track = _queue.value.find { it.id == trackId }
+            ?: _vibeTracks.value.find { it.id == trackId }
+            ?: _currentTrack.value
+        database.toggleLike(track)
+        _likedIds.value = database.getLikedTracks().map { it.id }.toSet()
     }
 
     private fun onTrackEnded() {
